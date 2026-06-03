@@ -1,23 +1,27 @@
 import os
 from groq import Groq
 from dotenv import load_dotenv
+load_dotenv()
 import requests
 from bs4 import BeautifulSoup
 import re
+from openai import OpenAI
 
 HEADERS = {
     "User-Agent": "react-tutorial/1.0 (learning project; your@email.com)"
 }
-REACT_INSTRUCTION="""
-    Solve a question answering task with interleaving Thought, Action, Observation steps.
-    Thought reasons about the current situation.
-    Action must be one of:
-    - search[entity]
-    - lookup[keyword]
-    - finish[answer]
-    Output ONLY the next Thought and Action, then stop.
-    If the answer is not in the search result, use lookup[keyword] 
-    on the current page before searching again.
+REACT_INSTRUCTION = """Solve a question answering task with interleaving 
+Thought, Action, Observation steps.
+Thought reasons about the current situation.
+Action must be one of:
+- search[entity]
+- lookup[keyword]
+- finish[answer]
+Output ONLY the next Thought and Action, then stop.
+If the answer is not in the search result, use lookup[keyword]
+on the current page before searching again.
+The answer in finish[answer] must be as short as possible.
+A name, a yes/no, a number, or a short phrase. Never a full sentence.
 """
 
 REACT_EXAMPLES = """Question: What is the elevation range for the area that the eastern sector of the Colorado orogeny extends into?
@@ -56,28 +60,26 @@ Observation 2: Leonid Anatolievich Levin is a Soviet-American mathematician and 
 Thought 3: Leonid Levin is a mathematician and computer scientist. So Pavel Urysohn and Leonid Levin have the same type of work.
 Action 3: finish[yes]
 """
-load_dotenv()
-def setup_groq_client():
-    client = Groq(api_key = os.environ.get("GROQ_API_KEY"))
+
+def setup_openrouter_client():
+    client = OpenAI(
+        api_key=os.environ.get("OPENROUTER_API_KEY"),
+        base_url="https://openrouter.ai/api/v1"
+    )
     return client
 
-def call_llm(prompt,client,stop):
-    chat_completion = client.chat.completions.create(
-    messages=[
-        {
-            "role": "system",
-            "content": "You are a helpful assistant."
-        },
-        {
-            "role": "user",
-            "content": f"{prompt}",
-        }
-    ],
-    model="llama-3.3-70b-versatile",
-    temperature=0,
-    stop=stop
-)
-    return chat_completion.choices[0].message.content
+def call_llm(prompt, client, stop):
+    response = client.chat.completions.create(
+        model="meta-llama/llama-3.3-70b-instruct",  # or any model on OpenRouter
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "user", "content": prompt}
+        ],
+        temperature=0,
+        max_tokens=256,
+        stop=stop
+    )
+    return response.choices[0].message.content
 
 class WikiEnv:
     def __init__(self):
@@ -168,12 +170,8 @@ def run_cot(question, client):
     
     response = call_llm(prompt,client,stop=["\nObservation"])
     print(response)
-groq_client = setup_groq_client()
-run_react(
-    "Which team won the IPL 2026 and when and where was it held?",
-    groq_client
-)    
-run_cot(
-    "Which team won the IPL 2026 and when and where was it held?",
-    groq_client
-)    
+# groq_client = setup_groq_client() 
+# run_cot(
+#     "Which team won the IPL 2026 and when and where was it held?",
+#     groq_client
+# )    

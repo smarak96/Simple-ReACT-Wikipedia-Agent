@@ -10,9 +10,11 @@ def f1_score(predicted, gold):
     recall    = len(common) / len(gold_tokens)
     return 2 * precision * recall / (precision + recall)
 
-with open("eval_results.json") as f:
+import sys
+filename = sys.argv[1] if len(sys.argv) > 1 else "eval_results.json"
+with open(filename) as f:
     results = json.load(f)
 
-f1_scores = [f1_score(r["predicted"], r["gold"]) for r in results]
+f1_scores = [f1_score(r["predicted"] or "", r["gold"]) for r in results]
 avg_f1 = sum(f1_scores) / len(f1_scores)
 print(f"F1: {avg_f1:.1%}")

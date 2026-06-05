@@ -8,7 +8,7 @@ import re
 from openai import OpenAI
 
 HEADERS = {
-    "User-Agent": "react-tutorial/1.0 (learning project; your@email.com)"
+    "User-Agent": "react-tutorial/1.0 (learning project; smarak.patnaik96@gmail.com)"
 }
 REACT_INSTRUCTION = """Solve a question answering task with interleaving 
 Thought, Action, Observation steps.
@@ -22,6 +22,11 @@ If the answer is not in the search result, use lookup[keyword]
 on the current page before searching again.
 The answer in finish[answer] must be as short as possible.
 A name, a yes/no, a number, or a short phrase. Never a full sentence.
+
+If a search returns ambiguous results or multiple entities with the same name
+(e.g. a film with two versions, a person sharing a name with another),
+explore all possibilities before concluding. Use search[entity (disambiguator)]
+to narrow down, e.g. search[Grown Ups (2010 film)] or search[Grown Ups (1980 film)]
 """
 
 REACT_EXAMPLES = """Question: What is the elevation range for the area that the eastern sector of the Colorado orogeny extends into?
@@ -68,7 +73,7 @@ def setup_openrouter_client():
     )
     return client
 
-def call_llm(prompt, client, stop):
+def call_llm(prompt, client, stop=None):
     response = client.chat.completions.create(
         model="meta-llama/llama-3.3-70b-instruct",  # or any model on OpenRouter
         messages=[
@@ -80,6 +85,12 @@ def call_llm(prompt, client, stop):
         stop=stop
     )
     return response.choices[0].message.content
+def extract_trajectory(full_prompt, question):
+    marker = f"Question: {question}"
+    idx = full_prompt.rfind(marker)  # rfind = last occurrence, skips few-shot examples
+    if idx == -1:
+        return full_prompt
+    return full_prompt[idx:]
 
 class WikiEnv:
     def __init__(self):
@@ -87,7 +98,6 @@ class WikiEnv:
         self.lookup_keyword = None
         self.lookup_list =[]
         self.lookup_cnt=0
-        self.lookup_keyword = None
     def search(self,entity):
         url = "https://en.wikipedia.org/w/index.php?search=" + entity.replace(" ", "+")
         html = requests.get(url, headers=HEADERS).text
@@ -100,7 +110,7 @@ class WikiEnv:
             paras = [p.get_text().strip() for p in soup.find_all("p") if len(p.get_text().split()) > 2]
             self.page = " ".join(paras)
             sentences = get_sentences(self.page)
-            return " ".join(sentences[:5])
+            return " ".join(sentences[:10])
     def lookup(self, keyword):
         if self.page is None:
             return "No page is open. Use search first."
@@ -124,13 +134,17 @@ def get_sentences(text_blob):
     text_list = text_blob.split(". ")
     text_list = [s + "." for s in text_list if s.strip()!=""]
     return text_list
-def build_prompt(question):
-
-    return REACT_INSTRUCTION + REACT_EXAMPLES + f"Question: {question}\n"
-def run_react(question, client, max_steps=10):
+def build_prompt(question, memory=None):
+    p = REACT_INSTRUCTION + REACT_EXAMPLES
+    if memory:
+        p += "Reflections from your past failed attempts on this question:\n"
+        p += "\n".join(f"- {r}" for r in memory) + "\n\n"
+    return p + f"Question: {question}\n"
+def run_react(question, client, max_steps=10,memory=None):
     env = WikiEnv()
-    prompt = build_prompt(question)
+    prompt=build_prompt(question,memory = memory)
     
+        
     for step in range(1, max_steps + 1):
         chunk = call_llm(prompt, client, stop=["\nObservation"])
         print(chunk)
@@ -139,14 +153,14 @@ def run_react(question, client, max_steps=10):
         match = re.search(r"Action\s*\d*\s*:\s*(\w+)\[(.+?)\]", chunk)
         if not match:
             print("Could not parse action, stopping.")
-            break
+            return None,prompt
             
         action = match.group(1).lower()
         arg = match.group(2).strip()
         
         if action == "finish":
             print(f"\n>>> ANSWER: {arg}")
-            return arg
+            return arg,prompt
         elif action == "search":
             obs = env.search(arg)
         elif action == "lookup":
@@ -158,18 +172,18 @@ def run_react(question, client, max_steps=10):
         print(obs_str)
         prompt += obs_str
     
-    return "No answer found within step limit."
+    return "No answer found within step limit.",prompt
 
-def run_cot(question, client):
-    prompt = f"""Answer the following question by reasoning 
-        step by step. Think through what you know, then give a 
-        final answer.
+# def run_cot(question, client):
+#     prompt = f"""Answer the following question by reasoning 
+#         step by step. Think through what you know, then give a 
+#         final answer.
 
-        Question: {question}
-        Thought:"""
+#         Question: {question}
+#         Thought:"""
     
-    response = call_llm(prompt,client,stop=["\nObservation"])
-    print(response)
+#     response = call_llm(prompt,client,stop=["\nObservation"])
+#     print(response)
 # groq_client = setup_groq_client() 
 # run_cot(
 #     "Which team won the IPL 2026 and when and where was it held?",

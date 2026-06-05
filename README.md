@@ -1,4 +1,10 @@
-# ReAct vs. Chain-of-Thought
+# AI Agents from Scratch
+
+Paper implementations of agent reasoning frameworks, evaluated on HotpotQA using Llama 3.3 70B.
+
+---
+
+# 1. ReAct vs. Chain-of-Thought
 
 A minimal implementation of **ReAct** ([Yao et al., 2022](https://arxiv.org/abs/2210.03629)) — *Reasoning + Acting* — compared against plain Chain-of-Thought (CoT) prompting.
 
@@ -34,7 +40,7 @@ Main failure mode: giving up on hard multi-hop questions rather than hallucinati
 
 ---
 
-## Reflexion + ReAct
+# 2. Reflexion + ReAct
 
 An implementation of **Reflexion** ([Shinn et al., 2023](https://arxiv.org/abs/2303.11366)) built on top of the ReAct agent. When the agent fails a question, a reflection LLM diagnoses what went wrong and suggests a better search strategy. That critique is fed into the next attempt as context.
 
